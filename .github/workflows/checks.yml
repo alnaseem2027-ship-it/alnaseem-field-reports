@@ -5,6 +5,13 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_FIREBASE_API_KEY: AIzaSyA6bO1SGqiLuM2h29oTOM_WeVYZpg3oZS4
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: alnaseem-field-reports.firebaseapp.com
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: alnaseem-field-reports
+      NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: alnaseem-field-reports.firebasestorage.app
+      NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '343899326790'
+      NEXT_PUBLIC_FIREBASE_APP_ID: '1:343899326790:web:df4efdff847d2a7404bd47'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
