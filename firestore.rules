@@ -1,0 +1,53 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function active() {
+      return request.auth != null && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active == true;
+    }
+    function admin() { return active() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'; }
+    function owner(data) { return active() && data.createdByUid == request.auth.uid; }
+    function valid(data) {
+      return data.customerName is string && data.customerName.size() > 0 && data.customerName.size() <= 300
+        && data.reportDate is string && data.reportDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && data.workType in ['installation', 'maintenance', 'inspection']
+        && data.paymentStatus in ['cash', 'on_account'] && data.warranty in ['yes', 'no']
+        && data.parts is list && data.parts.size() <= 100
+        && data.technicians is list && data.technicians.size() <= 100
+        && data.serviceFee is number && data.serviceFee >= 0 && data.archived is bool && data.revision is int;
+    }
+    function hasHistory(reportId, data) {
+      let version = string(data.revision);
+      let entry = getAfter(/databases/$(database)/documents/reports/$(reportId)/history/$(version)).data;
+      return entry.actorUid == request.auth.uid && entry.snapshot == data;
+    }
+    match /users/{uid} {
+      allow read: if admin() || (request.auth != null && request.auth.uid == uid);
+      allow create: if admin() && request.resource.data.role == 'employee' && request.resource.data.active == true && request.resource.data.uid == uid;
+      allow update: if admin() && uid != request.auth.uid;
+      allow delete: if false;
+    }
+    match /reports/{reportId} {
+      allow read: if admin() || owner(resource.data) || (active() && !exists(/databases/$(database)/documents/reports/$(reportId)));
+      allow create: if active() && owner(request.resource.data) && valid(request.resource.data)
+        && request.resource.data.id == reportId && request.resource.data.reportNumber == 'FR-' + reportId
+        && request.resource.data.revision == 1 && request.resource.data.archived == false && hasHistory(reportId, request.resource.data);
+      allow update: if (admin() || owner(resource.data)) && valid(request.resource.data)
+        && request.resource.data.createdByUid == resource.data.createdByUid
+        && request.resource.data.createdByName == resource.data.createdByName
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.reportNumber == resource.data.reportNumber && request.resource.data.id == resource.data.id
+        && request.resource.data.revision == resource.data.get('revision', 0) + 1
+        && (!resource.data.archived || admin()) && hasHistory(reportId, request.resource.data);
+      allow delete: if false;
+      match /history/{version} {
+        allow read: if admin() || owner(get(/databases/$(database)/documents/reports/$(reportId)).data);
+        allow create: if active() && (admin() || owner(getAfter(/databases/$(database)/documents/reports/$(reportId)).data))
+          && request.resource.data.actorUid == request.auth.uid
+          && version == string(request.resource.data.snapshot.revision)
+          && request.resource.data.snapshot == getAfter(/databases/$(database)/documents/reports/$(reportId)).data;
+        allow update, delete: if false;
+      }
+    }
+  }
+}
