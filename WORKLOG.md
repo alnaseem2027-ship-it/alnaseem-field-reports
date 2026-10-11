@@ -137,6 +137,7 @@
 - إضافة .firebaserc وربط معرف المشروع في .env.example؛ API key وApp ID لم يقدمهما المستخدم بعد.
 - تحديث DEPLOYMENT.md بمسار Spark فقط. الأقسام السابقة أعلاه تاريخية ويحل هذا القسم محل وصف API وFirebase Admin وVercel.
 - نشر Firebase أو كتابة GitHub لم ينجحا بعد، ويتطلبان تسجيل الدخول بالحساب المالك وإعداد Web app.
+- نجح بناء static export إلى out وفحص Excel. تم إنشاء commit محلي بهوية Codex، ومحاولة git push رفضت بخطأ 403 لأن بيانات اعتماد Git الحالية للحساب anatshih، وليس المالك alnaseem2027-ship-it.
 
 ## تجهيز GitHub وFirebase - 2026-10-11
 
