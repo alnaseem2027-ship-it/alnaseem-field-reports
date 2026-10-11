@@ -40,7 +40,7 @@ npx firebase-tools deploy --only hosting,firestore:rules --project alnaseem-fiel
 
 ## أول مدير
 
-أنشئ حساب المدير من Firebase Authentication، ثم مستند users/UID من Console يحوي uid وemail وdisplayName وrole=admin وactive=true وcreatedAt كنص ISO. لا تتيح قواعد عامة لإنشاء المدير. المدير ينشئ الموظفين باستخدام جلسة Auth ثانوية مؤقتة دون تبديل جلسته.
+اتبع FIRST_ADMIN.md لإنشاء admin ببريد داخلي ثم مستند users/UID. المدير ينشئ الموظفين باختيار اسم المستخدم وكلمة المرور؛ جلسة Auth ثانوية مؤقتة تبقي المدير مسجلًا. الدخول على الموقع لا يتطلب Google أو بريد الموظف الحقيقي.
 
 ## الضوابط والاختبارات
 

@@ -1,0 +1,13 @@
+const assert = require('node:assert/strict');
+const ts = require('typescript');
+const fs = require('node:fs');
+const Module = require('node:module');
+const compiled = ts.transpileModule(fs.readFileSync('src/lib/username.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+const mod = new Module('username', module);
+mod._compile(compiled, 'username');
+const { normalizeUsername, usernameEmail } = mod.exports;
+assert.equal(normalizeUsername('  Ahmad_01 '), 'ahmad_01');
+assert.equal(usernameEmail('ADMIN'), 'admin@alnaseem-field-reports.firebaseapp.com');
+assert.equal(usernameEmail('Admin'), usernameEmail('admin'));
+for (const value of ['ab', 'a'.repeat(33), 'a b', 'admin@example.com', 'أحمد', '_admin']) assert.throws(() => normalizeUsername(value));
+console.log('PASS: username normalization, case-insensitive identity and rejected invalid usernames.');

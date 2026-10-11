@@ -41,6 +41,7 @@ import {
   ,loadReportHistory, createEmployeeAccount, type HistoryEntry
 } from "@/lib/reportStore";
 import type { AppUser, FieldReport, ReportPart, UserRole, WarrantyStatus, WorkType } from "@/lib/types";
+import { normalizeUsername, usernameEmail } from "@/lib/username";
 
 const workTypeLabels: Record<WorkType, string> = {
   installation: "تركيب",
@@ -91,7 +92,9 @@ function reportTotal(report: FieldReport) {
 
 export default function Home() {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [loggingIn, setLoggingIn] = useState(false);
+  const [creatingEmployee, setCreatingEmployee] = useState(false);
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [allReports, setReports] = useState<FieldReport[]>([]);
@@ -106,7 +109,7 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [workFilter, setWorkFilter] = useState<"all" | WorkType>("all");
   const [saving, setSaving] = useState(false);
-  const [employeeForm, setEmployeeForm] = useState({ displayName: "", email: "", password: "" });
+  const [employeeForm, setEmployeeForm] = useState({ displayName: "", username: "", password: "" });
   const [notice, setNotice] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -128,6 +131,7 @@ export default function Home() {
       setCurrentUser({
         uid: firebaseUser.uid,
         email: firebaseUser.email || "",
+        username: data.username || firebaseUser.email?.split("@")[0] || "",
         displayName: data?.displayName || firebaseUser.displayName || firebaseUser.email || "مستخدم",
         role: (data?.role as UserRole) || "employee",
         active: data?.active !== false
@@ -235,6 +239,7 @@ export default function Home() {
 
   async function login(event: React.FormEvent) {
     event.preventDefault();
+    if (loggingIn) return;
     setAuthError("");
     if (!isFirebaseConfigured || !auth) {
       setCurrentUser({
@@ -247,11 +252,13 @@ export default function Home() {
       return;
     }
 
+    setLoggingIn(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      await signInWithEmailAndPassword(auth, usernameEmail(username), password);
+      setPassword("");
     } catch {
-      setAuthError("تعذر تسجيل الدخول. تحقق من البريد وكلمة المرور.");
-    }
+      setAuthError("تعذر تسجيل الدخول. تحقق من اسم المستخدم وكلمة المرور.");
+    } finally { setLoggingIn(false); }
   }
 
   async function logout() {
@@ -338,28 +345,33 @@ export default function Home() {
 
   async function createEmployee(event: React.FormEvent) {
     event.preventDefault();
-    if (!currentUser || currentUser.role !== "admin") return;
+    if (!currentUser || currentUser.role !== "admin" || creatingEmployee) return;
     setNotice("");
+    try { normalizeUsername(employeeForm.username); } catch (error) { setNotice((error as Error).message); return; }
+    if (employeeForm.password.length < 8) { setNotice("كلمة المرور يجب أن تكون 8 أحرف على الأقل."); return; }
 
     if (!isFirebaseConfigured || !auth) {
       await saveDemoUser({
         uid: "",
-        email: employeeForm.email,
+        email: usernameEmail(employeeForm.username),
+        username: normalizeUsername(employeeForm.username),
         displayName: employeeForm.displayName,
         role: "employee",
         active: true
       });
       setUsers(await loadUsers());
-      setEmployeeForm({ displayName: "", email: "", password: "" });
+      setEmployeeForm({ displayName: "", username: "", password: "" });
       setNotice("تم إنشاء موظف تجريبي محليًا.");
       return;
     }
 
+    setCreatingEmployee(true);
     try { await createEmployeeAccount(employeeForm); }
-    catch { setNotice("تعذر إنشاء الحساب. تحقق من البريد وكلمة المرور وصلاحياتك."); return; }
+    catch (error) { setNotice((error as { code?: string }).code === "auth/email-already-in-use" ? "اسم المستخدم مستخدم بالفعل. اختر اسمًا آخر." : "تعذر إنشاء الحساب. تحقق من بياناته وصلاحياتك."); return; }
+    finally { setCreatingEmployee(false); }
 
     setUsers(await loadUsers());
-    setEmployeeForm({ displayName: "", email: "", password: "" });
+    setEmployeeForm({ displayName: "", username: "", password: "" });
     setNotice("تم إنشاء حساب الموظف بنجاح.");
   }
 
@@ -376,18 +388,18 @@ export default function Home() {
           </div>
           <form onSubmit={login} className="login-form">
             <label>
-              البريد الإلكتروني
-              <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="name@company.com" />
+              اسم المستخدم
+              <input required={isFirebaseConfigured} dir="ltr" autoCapitalize="none" autoComplete="username" spellCheck={false} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="username" />
             </label>
             <label>
               كلمة المرور
-              <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" placeholder="••••••••" />
+              <input required={isFirebaseConfigured} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} type="password" placeholder="••••••••" />
             </label>
             {authError && <p className="error-text">{authError}</p>}
             {!isFirebaseConfigured && <p className="hint">نسخة تجريبية · البيانات محفوظة على هذا الجهاز فقط</p>}
-            <button className="primary-btn" type="submit">
+            <button className="primary-btn" type="submit" disabled={loggingIn}>
               <ShieldCheck size={18} />
-              دخول النظام
+              {loggingIn ? "جارٍ تسجيل الدخول..." : "دخول النظام"}
             </button>
           </form>
         </section>
@@ -463,16 +475,16 @@ export default function Home() {
                 <input required value={employeeForm.displayName} onChange={(event) => setEmployeeForm({ ...employeeForm, displayName: event.target.value })} />
               </label>
               <label>
-                البريد الإلكتروني
-                <input required type="email" value={employeeForm.email} onChange={(event) => setEmployeeForm({ ...employeeForm, email: event.target.value })} />
+                اسم المستخدم
+                <input required dir="ltr" autoCapitalize="none" autoComplete="off" spellCheck={false} minLength={3} maxLength={32} pattern="[a-zA-Z0-9][a-zA-Z0-9_-]{2,31}" value={employeeForm.username} onChange={(event) => setEmployeeForm({ ...employeeForm, username: event.target.value })} />
               </label>
               <label>
                 كلمة المرور
-                <input required type="password" value={employeeForm.password} onChange={(event) => setEmployeeForm({ ...employeeForm, password: event.target.value })} />
+                <input required type="password" autoComplete="new-password" minLength={8} value={employeeForm.password} onChange={(event) => setEmployeeForm({ ...employeeForm, password: event.target.value })} />
               </label>
-              <button className="primary-btn" type="submit">
+              <button className="primary-btn" type="submit" disabled={creatingEmployee}>
                 <UserPlus size={18} />
-                إنشاء الموظف
+                {creatingEmployee ? "جارٍ إنشاء الحساب..." : "إنشاء الموظف"}
               </button>
             </form>
             <section className="panel">
@@ -486,7 +498,7 @@ export default function Home() {
                   <div className="user-row" key={user.uid || user.email}>
                     <div>
                       <strong>{user.displayName}</strong>
-                      <span>{user.email}</span>
+                      <span>{user.username || user.email.split("@")[0]}</span>
                     </div>
                     <b>{user.role === "admin" ? "مدير" : "موظف"}</b>
                   </div>

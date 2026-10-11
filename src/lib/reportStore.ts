@@ -19,6 +19,7 @@ import { auth, db, firebaseConfig, isFirebaseConfigured } from "./firebase";
 import { deleteApp, initializeApp } from "firebase/app";
 import { createUserWithEmailAndPassword, deleteUser, getAuth, inMemoryPersistence, setPersistence, signOut } from "firebase/auth";
 import type { AppUser, AutofillOptions, FieldReport, ReportPart } from "./types";
+import { normalizeUsername, usernameEmail } from "./username";
 
 const storageKey = "alnaseem_reports_demo";
 const usersKey = "alnaseem_users_demo";
@@ -141,16 +142,18 @@ async function mutateReport(action: "save" | "archive" | "restore", id: string, 
   });
 }
 
-export async function createEmployeeAccount(form: { email: string; password: string; displayName: string }) {
+export async function createEmployeeAccount(form: { username: string; password: string; displayName: string }) {
   if (!db || !auth?.currentUser) throw new Error("يلزم تسجيل الدخول.");
+  const username = normalizeUsername(form.username);
+  const email = usernameEmail(username);
   // A separate in-memory Auth instance leaves the manager's session intact.
   const secondary = initializeApp(firebaseConfig, `employee-${crypto.randomUUID()}`);
   const secondaryAuth = getAuth(secondary);
   try {
     await setPersistence(secondaryAuth, inMemoryPersistence);
-    const { user } = await createUserWithEmailAndPassword(secondaryAuth, form.email, form.password);
+    const { user } = await createUserWithEmailAndPassword(secondaryAuth, email, form.password);
     try {
-      await setDoc(doc(db, "users", user.uid), { uid: user.uid, email: form.email, displayName: form.displayName, role: "employee", active: true, createdAt: new Date().toISOString(), createdByUid: auth.currentUser.uid });
+      await setDoc(doc(db, "users", user.uid), { uid: user.uid, username, email, displayName: form.displayName.trim(), role: "employee", active: true, createdAt: new Date().toISOString(), createdByUid: auth.currentUser.uid });
     } catch (error) { await deleteUser(user); throw error; }
     await signOut(secondaryAuth);
   } finally { await deleteApp(secondary); }

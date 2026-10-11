@@ -20,4 +20,5 @@ jobs:
           cache: npm
       - run: npm ci
       - run: node tests/excel-export.cjs
+      - run: node tests/username.cjs
       - run: npm run build

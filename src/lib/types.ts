@@ -47,6 +47,7 @@ export type FieldReport = {
 };
 
 export type AppUser = {
+  username?: string;
   uid: string;
   email: string;
   displayName: string;
