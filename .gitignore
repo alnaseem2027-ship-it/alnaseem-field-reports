@@ -14,5 +14,7 @@ firebase-debug.log
 .firebase/
 *-check.png
 firebase-live-check.png
+company-*.png
+company-message.html
 tmp/
 *.pdf
