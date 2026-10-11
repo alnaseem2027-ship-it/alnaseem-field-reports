@@ -14,6 +14,9 @@ import {
   FileSpreadsheet,
   History,
   RotateCcw,
+  KeyRound,
+  UserCheck,
+  UserX,
   LogOut,
   Pencil,
   Plus,
@@ -26,7 +29,7 @@ import {
   Users
 } from "lucide-react";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { auth, db, isFirebaseConfigured } from "@/lib/firebase";
 import {
   archiveReport,
@@ -38,7 +41,7 @@ import {
   readDemoReports,
   saveDemoUser,
   saveReport
-  ,loadReportHistory, createEmployeeAccount, type HistoryEntry
+  ,loadReportHistory, createEmployeeAccount, manageEmployee, changeAccountPassword, type HistoryEntry
 } from "@/lib/reportStore";
 import type { AppUser, FieldReport, ReportPart, UserRole, WarrantyStatus, WorkType } from "@/lib/types";
 import { normalizeUsername, usernameEmail } from "@/lib/username";
@@ -116,6 +119,12 @@ export default function Home() {
   const [editorMessage, setEditorMessage] = useState("");
   const [exporting, setExporting] = useState(false);
   const [employeeFilter, setEmployeeFilter] = useState("");
+  const [busyUser, setBusyUser] = useState("");
+  const [showDeletedUsers, setShowDeletedUsers] = useState(false);
+  const [passwordTarget, setPasswordTarget] = useState<AppUser | null>(null);
+  const [passwordForm, setPasswordForm] = useState({ current: "", next: "", confirm: "" });
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState("");
 
   useEffect(() => {
     if (!isFirebaseConfigured || !auth || !db) return;
@@ -127,7 +136,7 @@ export default function Home() {
       if (!db) return;
       const profile = await getDoc(doc(db, "users", firebaseUser.uid));
       const data = profile.data();
-      if (!data || data.active === false) { setAuthError("الحساب غير فعال."); if (auth) await signOut(auth); return; }
+      if (!data || data.active === false || data.deleted) { setAuthError("الحساب غير فعال."); if (auth) await signOut(auth); return; }
       setCurrentUser({
         uid: firebaseUser.uid,
         email: firebaseUser.email || "",
@@ -138,6 +147,37 @@ export default function Home() {
       });
     });
   }, []);
+
+  useEffect(() => {
+    if (!currentUser || !db || !auth) return;
+    return onSnapshot(doc(db, "users", currentUser.uid), (snapshot) => {
+      const profile = snapshot.data();
+      if (!profile || !profile.active || profile.deleted) {
+        setReports([]); setUsers([]); setEditingReport(null); setPreviewReport(null); setHistory(null); setPasswordTarget(null); setDraft(null);
+        setCurrentUser(null); setAuthError("تم تعطيل الحساب أو حذفه. راجع المدير.");
+        if (auth) void signOut(auth);
+      }
+    }, () => { setCurrentUser(null); setReports([]); if (auth) void signOut(auth); });
+  }, [currentUser?.uid]);
+
+  async function updateEmployee(user: AppUser, action: "enable" | "disable" | "delete" | "restore") {
+    if (!currentUser || busyUser) return;
+    if (action === "delete" && !window.confirm(`حذف حساب ${user.displayName} من القائمة وتعطيل وصوله؟ ستبقى تقاريره محفوظة ويمكن استرجاع الحساب.`)) return;
+    setBusyUser(user.uid);
+    try { await manageEmployee(currentUser, user, action); setUsers(await loadUsers()); setNotice("تم تحديث حساب الموظف."); }
+    catch { setNotice("تعذر تحديث الحساب. تحقق من اتصالك وصلاحياتك."); }
+    finally { setBusyUser(""); }
+  }
+  function openPassword(user: AppUser) { setPasswordTarget(user); setPasswordForm({ current: "", next: "", confirm: "" }); setPasswordMessage(""); }
+  async function submitPassword(event: React.FormEvent) {
+    event.preventDefault();
+    if (!passwordTarget || passwordBusy) return;
+    if (passwordForm.next !== passwordForm.confirm) { setPasswordMessage("تأكيد كلمة المرور غير مطابق."); return; }
+    setPasswordBusy(true);
+    try { await changeAccountPassword(passwordTarget, passwordForm.current, passwordForm.next); setPasswordTarget(null); setPasswordForm({ current: "", next: "", confirm: "" }); setNotice("تم تغيير كلمة المرور."); }
+    catch { setPasswordMessage("تعذر تغيير كلمة المرور. تحقق من الكلمة الحالية وصلاحيات الحساب."); }
+    finally { setPasswordBusy(false); }
+  }
 
   useEffect(() => {
     if (!currentUser) return;
@@ -441,6 +481,7 @@ export default function Home() {
           <LogOut size={18} />
           خروج
         </button>
+        <button className="ghost-btn" onClick={() => openPassword(currentUser)}><KeyRound size={18} />كلمة مروري</button>
       </aside>
 
       <section className="workspace">
@@ -493,14 +534,21 @@ export default function Home() {
                 <h2>الحسابات</h2>
               </div>
               <div className="stack-list">
+                <label className="deleted-toggle"><input type="checkbox" checked={showDeletedUsers} onChange={(event) => setShowDeletedUsers(event.target.checked)} />الحسابات المحذوفة</label>
                 {users.length === 0 && <p className="empty-text">لا توجد حسابات محفوظة بعد.</p>}
-                {users.map((user) => (
+                {users.filter((user) => !!user.deleted === showDeletedUsers).map((user) => (
                   <div className="user-row" key={user.uid || user.email}>
                     <div>
                       <strong>{user.displayName}</strong>
                       <span>{user.username || user.email.split("@")[0]}</span>
                     </div>
-                    <b>{user.role === "admin" ? "مدير" : "موظف"}</b>
+                    <div className="employee-controls"><b className={user.active ? "account-active" : "account-inactive"}>{user.deleted ? "محذوف" : user.active ? "فعال" : "معطل"}</b>{user.role === "employee" && <div className="row-actions">
+                      {user.deleted ? <button disabled={!!busyUser} title="استرجاع الحساب معطلاً" aria-label={`استرجاع ${user.displayName}`} onClick={() => updateEmployee(user, "restore")}><RotateCcw size={18} /></button> : <>
+                        <button disabled={!!busyUser} title={user.active ? "تعطيل" : "تفعيل"} aria-label={`${user.active ? "تعطيل" : "تفعيل"} ${user.displayName}`} onClick={() => updateEmployee(user, user.active ? "disable" : "enable")}>{user.active ? <UserX size={18} /> : <UserCheck size={18} />}</button>
+                        <button title="تغيير كلمة المرور بالكلمة الحالية" aria-label={`كلمة مرور ${user.displayName}`} onClick={() => openPassword(user)}><KeyRound size={18} /></button>
+                        <button disabled={!!busyUser} title="حذف الحساب من القائمة" aria-label={`حذف حساب ${user.displayName}`} onClick={() => updateEmployee(user, "delete")}><Trash2 size={18} /></button>
+                      </>}
+                    </div>}</div>
                   </div>
                 ))}
               </div>
@@ -553,6 +601,7 @@ export default function Home() {
       )}
 
       {previewReport && <PrintPreview report={previewReport} onClose={() => setPreviewReport(null)} />}
+      {passwordTarget && <div className="modal-backdrop"><form className="history-panel password-form" role="dialog" aria-modal="true" aria-label="تغيير كلمة المرور" onSubmit={submitPassword}><h2>كلمة مرور {passwordTarget.displayName}</h2><label>كلمة المرور الحالية<input required type="password" autoComplete="current-password" value={passwordForm.current} onChange={(event) => setPasswordForm({ ...passwordForm, current: event.target.value })} /></label><label>كلمة المرور الجديدة<input required type="password" minLength={8} autoComplete="new-password" value={passwordForm.next} onChange={(event) => setPasswordForm({ ...passwordForm, next: event.target.value })} /></label><label>تأكيد كلمة المرور<input required type="password" minLength={8} autoComplete="new-password" value={passwordForm.confirm} onChange={(event) => setPasswordForm({ ...passwordForm, confirm: event.target.value })} /></label>{passwordMessage && <p role="alert" className="error-text">{passwordMessage}</p>}<div className="editor-actions"><button className="primary-btn" type="submit" disabled={passwordBusy}>حفظ</button><button className="ghost-btn" type="button" disabled={passwordBusy} onClick={() => { setPasswordTarget(null); setPasswordForm({ current: "", next: "", confirm: "" }); }}>إغلاق</button></div></form></div>}
       {history && <div className="modal-backdrop"><section className="history-panel" role="dialog" aria-modal="true" aria-label="سجل التعديلات"><button className="ghost-btn" onClick={() => setHistory(null)}>إغلاق</button><h2>سجل التعديلات</h2>{!history.length && <p>لا يوجد سجل للتعديلات السابقة قبل تفعيل هذه الخاصية.</p>}{history.map((entry, index) => <div className="history-entry" key={index}><strong>{{ create: "إنشاء", save: "تعديل", archive: "حذف", restore: "استرجاع" }[entry.action] || entry.action}</strong><span>{entry.actorName} · {new Date(entry.at).toLocaleString("ar")}</span><button className="ghost-btn" onClick={() => setPreviewReport(entry.snapshot)}>عرض نسخة التقرير</button></div>)}</section></div>}
     </main>
   );

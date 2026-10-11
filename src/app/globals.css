@@ -772,6 +772,12 @@ svg { flex-shrink: 0; }
 .history-panel { background: #fff; padding: 24px; width: min(700px, 100%); max-height: 90dvh; overflow: auto; border-radius: 8px; }
 .history-entry { display: grid; gap: 8px; padding: 16px 0; border-top: 1px solid var(--line); }
 .history-entry span { color: var(--muted); }
+.password-form { display: grid; gap: 18px; }
+.employee-controls { display: grid; gap: 8px; justify-items: end; }
+.account-active { color: #21624e; font-size: 13px; }
+.account-inactive { color: #9e3027; font-size: 13px; }
+.deleted-toggle { display: flex; align-items: center; gap: 8px; }
+.deleted-toggle input { width: 18px; height: 18px; }
 .sidebar nav button { min-width: 0; }
 @media (max-width: 660px) { .sidebar nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .print-backdrop { z-index: 30; }

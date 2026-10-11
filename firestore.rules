@@ -3,7 +3,8 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function active() {
       return request.auth != null && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active == true;
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active == true
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('deleted', false) == false;
     }
     function admin() { return active() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'; }
     function owner(data) { return active() && data.createdByUid == request.auth.uid; }
@@ -24,7 +25,10 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if admin() || (request.auth != null && request.auth.uid == uid);
       allow create: if admin() && request.resource.data.role == 'employee' && request.resource.data.active == true && request.resource.data.uid == uid;
-      allow update: if admin() && uid != request.auth.uid;
+      allow update: if admin() && uid != request.auth.uid && resource.data.role == 'employee'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['active', 'deleted', 'updatedAt', 'updatedByUid'])
+        && request.resource.data.active is bool && request.resource.data.deleted is bool
+        && (!request.resource.data.deleted || request.resource.data.active == false);
       allow delete: if false;
     }
     match /reports/{reportId} {

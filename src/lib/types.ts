@@ -53,6 +53,7 @@ export type AppUser = {
   displayName: string;
   role: UserRole;
   active: boolean;
+  deleted?: boolean;
   createdAt?: string;
 };
 

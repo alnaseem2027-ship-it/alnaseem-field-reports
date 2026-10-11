@@ -6,6 +6,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  getDoc,
   limit,
   onSnapshot,
   orderBy,
@@ -17,7 +18,7 @@ import {
 } from "firebase/firestore";
 import { auth, db, firebaseConfig, isFirebaseConfigured } from "./firebase";
 import { deleteApp, initializeApp } from "firebase/app";
-import { createUserWithEmailAndPassword, deleteUser, getAuth, inMemoryPersistence, setPersistence, signOut } from "firebase/auth";
+import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, getAuth, inMemoryPersistence, reauthenticateWithCredential, setPersistence, signInWithEmailAndPassword, signOut, updatePassword } from "firebase/auth";
 import type { AppUser, AutofillOptions, FieldReport, ReportPart } from "./types";
 import { normalizeUsername, usernameEmail } from "./username";
 
@@ -175,6 +176,39 @@ export async function loadUsers(): Promise<AppUser[]> {
   if (!isFirebaseConfigured || !db) return readDemoUsers();
   const snapshot = await getDocs(query(collection(db, "users"), orderBy("createdAt", "desc"), limit(200)));
   return snapshot.docs.map((item) => ({ uid: item.id, ...item.data() }) as AppUser);
+}
+
+export async function manageEmployee(actor: AppUser, target: AppUser, action: "enable" | "disable" | "delete" | "restore") {
+  if (actor.role !== "admin" || !actor.active || target.role !== "employee" || target.uid === actor.uid) throw new Error("لا يسمح بتعديل هذا الحساب.");
+  const changes = { active: action === "enable", deleted: action === "delete" ? true : action === "restore" ? false : !!target.deleted, updatedAt: new Date().toISOString(), updatedByUid: actor.uid };
+  if (target.deleted && action === "enable") throw new Error("استرجع الحساب أولًا ثم فعّله.");
+  if (!isFirebaseConfigured || !db) {
+    writeDemoUsers(readDemoUsers().map((user) => user.uid === target.uid ? { ...user, ...changes } : user));
+    return;
+  }
+  await updateDoc(doc(db, "users", target.uid), changes);
+}
+
+export async function changeAccountPassword(target: AppUser, currentPassword: string, newPassword: string) {
+  if (!auth?.currentUser || !db) throw new Error("تغيير كلمة المرور متاح للحسابات الحقيقية فقط.");
+  if (newPassword.length < 8) throw new Error("كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل.");
+  const actor = auth.currentUser;
+  if (target.uid === actor.uid) {
+    await reauthenticateWithCredential(actor, EmailAuthProvider.credential(target.email, currentPassword));
+    await updatePassword(actor, newPassword);
+    return;
+  }
+  const profile = (await getDoc(doc(db, "users", actor.uid))).data();
+  if (profile?.role !== "admin" || profile.active !== true || target.role !== "employee" || target.deleted) throw new Error("ليس لديك صلاحية لهذا الحساب.");
+  const secondary = initializeApp(firebaseConfig, `password-${crypto.randomUUID()}`);
+  const secondaryAuth = getAuth(secondary);
+  try {
+    await setPersistence(secondaryAuth, inMemoryPersistence);
+    const { user } = await signInWithEmailAndPassword(secondaryAuth, target.email, currentPassword);
+    if (user.uid !== target.uid) throw new Error("الحساب غير مطابق.");
+    await updatePassword(user, newPassword);
+    await signOut(secondaryAuth);
+  } finally { await deleteApp(secondary); }
 }
 
 export async function saveDemoUser(user: AppUser) {
