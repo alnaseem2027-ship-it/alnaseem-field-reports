@@ -18,7 +18,7 @@ Next.js يصدر موقعًا ثابتًا إلى out. Firebase Hosting يستض
 
 ## GitHub
 
-اتصال Codex الحالي باسم anatshih لا يملك صلاحية الكتابة للمستودع المذكور. سجل الدخول بالحساب alnaseem2027-ship-it باستخدام:
+اكتمل تسجيل الدخول بالحساب alnaseem2027-ship-it ورفع الكود إلى main. لإعادة إعداد جهاز جديد:
 
 ```powershell
 gh auth login --hostname github.com --git-protocol https --web
@@ -36,7 +36,7 @@ npm run build
 npx firebase-tools deploy --only hosting,firestore:rules --project alnaseem-field-reports
 ```
 
-ابدأ النشر بعد اكتمال إعدادات Web. الموقع المتوقع بعد نجاح النشر: https://alnaseem-field-reports.web.app، وهذا عنوان متوقع وليس تأكيد نشر.
+تم نشر الموقع بنجاح على https://alnaseem-field-reports.web.app بتاريخ 2026-10-11، مع إنشاء قاعدة default ونشر قواعد Firestore. إعدادات Web متوفرة محليًا وفي بيئة فحص GitHub. ما زال تفعيل Email/Password وإنشاء أول مدير واختبار الحسابات مطلوبًا.
 
 ## أول مدير
 

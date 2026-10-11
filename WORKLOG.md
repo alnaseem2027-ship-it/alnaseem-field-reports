@@ -126,6 +126,17 @@
 
 ## الخطوات التالية بعد هذه المرحلة
 
+## نجاح نشر Firebase - 2026-10-11
+
+- اكتمل تفويض Firebase CLI بحساب صاحب المشروع؛ لم يحفظ رمز التفويض في ملفات المشروع أو Git.
+- نجح deploy --only hosting,firestore:rules --project alnaseem-field-reports.
+- تم تفعيل Cloud Firestore API وإنشاء قاعدة (default) تلقائيًا بواسطة CLI أثناء النشر.
+- اجتازت firestore.rules فحص التجميع ونشرت. رفع Hosting 39 ملفًا من out وأصدر النسخة بنجاح.
+- الموقع المنشور: https://alnaseem-field-reports.web.app.
+- لا يوجد Vercel أو App Hosting أو تفعيل فوترة ضمن هذه العملية.
+- تفعيل Email/Password وإنشاء أول حساب مدير واختبار الصلاحيات بحسابات فعلية ما زال مطلوبًا؛ نجاح تجميع القواعد لا يعادل اختبار سلوكها.
+- فحص Playwright للموقع المنشور: عنوان الشركة وشاشة الدخول ظاهران، لا يظهر وضع التجربة، ولا يوجد امتداد أفقي بعرض هاتف 390 بكسل. تأكد وجود قاعدة STANDARD/FIRESTORE_NATIVE عبر CLI.
+
 ## إعداد تطبيق Firebase Web - 2026-10-11
 
 - استلام firebaseConfig من المستخدم وإضافة إعدادات Web إلى .env.local المستبعد من Git.

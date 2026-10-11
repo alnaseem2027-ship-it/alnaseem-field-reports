@@ -13,5 +13,6 @@ firebase-debug.log
 *firebase-adminsdk*.json
 .firebase/
 *-check.png
+firebase-live-check.png
 tmp/
 *.pdf
